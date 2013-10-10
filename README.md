@@ -1,12 +1,24 @@
-A 'time'-like utility for Unix that measures peak memory usage.
+About
+-----
+Memusg is a `time`-like utility for Unix that measures peak memory usage.  It works by repeatedly polling using `ps`.
 
-Works in both interactive and non-interactive environments.
+Features
+--------
 
-Usage:
+ * Periodic memory checking
+ * Output to file or inline (`stderr`)
+ * Configurable interval
+ * Works in both interactive and non-interactive environments
+ * Passes signals through to the client application
+
+
+
+Usage
+-----
 
 ```bash
 export PATH=$path_to_memusg
-memusg my_command
+memusg [OPTS] my_command
 ```
 
 Example:

@@ -1,4 +1,8 @@
-#!/usr/bin/env python
+#!/bin/sh
+''''exec python -u -- "$0" ${1+"$@"} # '''
+# vi: syntax=python
+
+import signal
 import sys
 import os
 from time import sleep
@@ -6,11 +10,27 @@ from subprocess import *
 
 # -o file.txt : output information to a file rather than stderr
 # -d          : debug mode
+# -m          : monitor mode: output every measurement
+# -p rate     : poll every rate seconds (default is 0.1)
+# -h          : Show usage info
+
+out         = sys.stderr
+DEBUG       = False
+poll_rate   = 0.1
+monitor     = False
+SIGNALS     = [signal.SIGINT, signal.SIGTERM, signal.SIGABRT]
+
+def print_usage(cmd):
+    print("USAGE: {} [-d] [-m] [-p TIME] [-o FILE] COMMAND [ARG [ARG [...]]]".format(cmd))
+    print("")
+    print(" -m      : Output every tick instead of at the end")
+    print(" -p TIME : Set the time period in seconds")
+    print(" -o FILE : Output to file (default is stdout)")
+    print(" -d      : Debug mode (verbose output)")
+    print("")
 
 
-out = sys.stderr
-DEBUG = False
-
+# Handle command-line input
 child_args = []
 i = 1
 while i < len(sys.argv):
@@ -19,6 +39,14 @@ while i < len(sys.argv):
         out = open(sys.argv[i], 'w')
     elif sys.argv[i] == '-d':
         DEBUG = True
+    elif sys.argv[i] == '-m':
+        monitor = True
+    elif sys.argv[i] == '-p':
+        i += 1
+        poll_rate = float(sys.argv[i])
+    elif sys.argv[i] == '-h':
+        print_usage(sys.argv[0])
+        sys.exit(0)
     else:
         child_args.append(sys.argv[i])
     i += 1
@@ -31,6 +59,10 @@ def log(msg):
     if DEBUG:
         print >>sys.stderr, "memusg: {}".format(msg)
 
+def put(msg):
+    out.write(msg)
+    out.flush # Only works if run with python -u
+
 def get_vsize(sid):
     vsize = 0
     # Example: /bin/ps -o vsize= --sid 23928
@@ -42,27 +74,42 @@ def get_vsize(sid):
         vsize += int(line.strip())
     return vsize
 
+def handle_signal(signal, frame):
+    # If the proc is running, pass the signal down.
+    if proc and not proc.returncode:
+        proc.send_signal(signal)
+    if fork_pid != 0:
+        os.kill(fork_pid, signal)
+    else:
+        sys.exit(0)
+
+
 # Create a new process session for this process so that we can
 # easily calculate the memory usage of the whole process tree using ps
 #
 # Since we need a new session using os.setsid(), we must first fork()
-pid = os.getpid()
-sid = os.getsid(pid)
-pgid = os.getpgid(pid)
+pid     = os.getpid()
+sid     = os.getsid(pid)
+pgid    = os.getpgid(pid)
 log("Pre-fork: PID is {} ; PGID is {} ; SID is {}".format(pid, pgid, sid))
 
-fork_pid = os.fork()
+fork_pid    = os.fork()
+proc        = None
+# Attach signal handler to everything we want to pass through
+for s in SIGNALS:
+    signal.signal(s, handle_signal)
+
 if fork_pid == 0:
     # We *are* the new fork (not the original process)
-    pid = os.getpid()
-    sid = os.getsid(pid)
-    pgid = os.getpgid(pid)
+    pid     = os.getpid()
+    sid     = os.getsid(pid)
+    pgid    = os.getpgid(pid)
     log("Post-fork: PID is {} ; PGID is {} ; SID is {}".format(pid, pgid, sid))
 
     log("Trying to init our own session".format(pid, pgid))
     os.setsid()
-    sid = os.getsid(pid)
-    pgid = os.getpgid(pid)
+    sid     = os.getsid(pid)
+    pgid    = os.getpgid(pid)
     log("Post-session init: PID is {} ; PGID is {} ; SID is {}".format(pid, pgid, sid))
         
     log("Starting child: {}".format(child_command))
@@ -71,12 +118,15 @@ if fork_pid == 0:
 
     vmpeak = -1
     while proc.returncode == None:
-        vmpeak = max(get_vsize(sid), vmpeak)
+        size = get_vsize(sid)
+        if monitor:
+            put("memusg: {} kb\n".format(size))
+        vmpeak = max(size, vmpeak)
         log("Waiting for child to exit. vmpeak={}".format(vmpeak))
         proc.poll()
-        sleep(0.1) # Time in seconds (float)
+        sleep(poll_rate) # Time in seconds (float)
     
-    out.write("memusg: vmpeak: {} kb\n".format(vmpeak))
+    put("memusg: vmpeak: {} kb\n".format(vmpeak))
 
     status = proc.returncode
     log("Child process returned {}".format(status))
