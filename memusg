@@ -5,6 +5,7 @@
 import signal
 import sys
 import os
+from time import gmtime, strftime, localtime
 from time import sleep
 from subprocess import *
 
@@ -85,6 +86,9 @@ def get_rssize(sid):
         rssize += int(line.strip())
     return rssize    
 
+def get_cur_time():    
+    return strftime("%Y-%m-%d %H:%M:%S", localtime())
+
 def handle_signal(signal, frame):
     # If the proc is running, pass the signal down.
     if proc and not proc.returncode:
@@ -135,6 +139,9 @@ if fork_pid == 0:
         if monitor:
             put("memusg: {} kb\n".format(size))
         #vmpeak = max(size, vmpeak)
+        if size > rspeak:
+            cur_time = get_cur_time()
+            put(f"[{cur_time}] rspeak={size}\n")
         rspeak = max(size, rspeak)
         #log("Waiting for child to exit. vmpeak={}".format(vmpeak))
         log("Waiting for child to exit. rspeak={}".format(rspeak))
@@ -142,7 +149,10 @@ if fork_pid == 0:
         sleep(poll_rate) # Time in seconds (float)
     
     #put("memusg: vmpeak: {} kb\n".format(vmpeak))
-    put("memusg: rspeak: {} kb\n".format(rspeak))
+    cur_time = get_cur_time()
+    ###echo "["$(date +"%Y-%m-%d %H:%M:%S")"]" "memusg Maximum resident set size (kbytes): $peak" >> $log_file
+    put(f"[{cur_time}] memusg Maximum resident set size (kbytes): {rspeak}\n")
+    #put("memusg: rspeak: {} kb\n".format(rspeak))
 
     status = proc.returncode
     log("Child process returned {}".format(status))
