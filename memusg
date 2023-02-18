@@ -74,6 +74,17 @@ def get_vsize(sid):
         vsize += int(line.strip())
     return vsize
 
+def get_rssize(sid):
+    rssize = 0
+    # Example: /bin/ps -o rssize= --sid 23928
+    proc = Popen(['ps', '-o', 'rssize=', '--sid', str(sid)], stdout=PIPE, stderr=None, shell=False)
+    (stdout, _stderr) = proc.communicate()
+    # Iterate over each process within the process tree of our process session
+    # (this ensures that we include processes launched by a child bash script, etc.)
+    for line in stdout.split():
+        rssize += int(line.strip())
+    return rssize    
+
 def handle_signal(signal, frame):
     # If the proc is running, pass the signal down.
     if proc and not proc.returncode:
@@ -118,7 +129,8 @@ if fork_pid == 0:
 
     vmpeak = -1
     while proc.returncode == None:
-        size = get_vsize(sid)
+        #size = get_vsize(sid)
+        size = get_rssize(sid)
         if monitor:
             put("memusg: {} kb\n".format(size))
         vmpeak = max(size, vmpeak)
