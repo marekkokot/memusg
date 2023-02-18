@@ -127,18 +127,22 @@ if fork_pid == 0:
     # "None" means "inherit from parent"
     proc = Popen(child_command, stdin=None, stdout=None, stderr=None, env=None, shell=True)
 
-    vmpeak = -1
+    #vmpeak = -1
+    rspeak = -1
     while proc.returncode == None:
         #size = get_vsize(sid)
         size = get_rssize(sid)
         if monitor:
             put("memusg: {} kb\n".format(size))
-        vmpeak = max(size, vmpeak)
-        log("Waiting for child to exit. vmpeak={}".format(vmpeak))
+        #vmpeak = max(size, vmpeak)
+        rspeak = max(size, rspeak)
+        #log("Waiting for child to exit. vmpeak={}".format(vmpeak))
+        log("Waiting for child to exit. rspeak={}".format(rspeak))
         proc.poll()
         sleep(poll_rate) # Time in seconds (float)
     
-    put("memusg: vmpeak: {} kb\n".format(vmpeak))
+    #put("memusg: vmpeak: {} kb\n".format(vmpeak))
+    put("memusg: rspeak: {} kb\n".format(rspeak))
 
     status = proc.returncode
     log("Child process returned {}".format(status))
