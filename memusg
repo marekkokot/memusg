@@ -62,7 +62,7 @@ def log(msg):
 
 def put(msg):
     out.write(msg)
-    out.flush # Only works if run with python -u
+    out.flush() # Only works if run with python -u
 
 def get_vsize(sid):
     vsize = 0
